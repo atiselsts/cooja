@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, University of Bristol
+ * Copyright (c) 2018-2019, University of Bristol
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,12 +74,13 @@ import org.contikios.cooja.plugins.skins.LogisticLossVisualizerSkin;
  * 
  * To model the path loss PL_{dBm}(d) this plugin uses the log-distance path loss model:
  *
- *  PL_{dBm}(d) = PL_0 + 10 * \alpha * \log_10 (d / d_0) + NormalDistribution(0, \sigma),
+ *  PL_{dBm}(d) = PL_0 + PL_t + 10 * \alpha * \log_10 (d / d_0) + NormalDistribution(0, \sigma),
  *
  * where:
  * - `d_0` is the transmission range in meters;
  * - `PL_0` is the loss at `d_0` (i.e. the Rx sensitivity, by default equal
  *    to `-100` dBm as on the TI CC2650 System-on-Chip for IEEE 802.15.4 packets)
+ * - `PL_t` is the time-varying component of the path loss (by default, zero)
  * - `\alpha` is the path loss exponent;
  * - `\sigma` is the standard deviation of the Additive White Gaussian Noise.
  * 
@@ -87,12 +88,23 @@ import org.contikios.cooja.plugins.skins.LogisticLossVisualizerSkin;
  * value of `\sigma` is 3.0 as well, both of which approximately correspond to
  * "indoors, 2.4 GHz frequency" according to RF propagation theory.
  *
+ * If the time-varying behavior is enabled, the value of `PL_t` is changing over time.
+ * The change is within bounds `[TVPL_{min}, TVPL_{max}]`. The evolution is done in discrete steps.
+ * At the time `t`, the `PL_t` is updated as:
+ *
+ *  PL_t = bound(PL_{t-1} + r),
+ *
+ * where `r` is a small random value, and `bound(pl) = min(MAX_PL, max(MIN_PL, pl))`,
+ * and `MIN_PL` and `MAX_PL` are time minimum and maximum values of the time-varying path loss.
+ *
  * @see UDGM
  * @author Atis Elsts
  */
 @ClassDescription("LogisticLoss Medium")
 public class LogisticLoss extends AbstractRadioMedium {
     private static Logger logger = Logger.getLogger(LogisticLoss.class);
+
+    private Simulation sim = null;
 
     /* Success ratio of TX. If this fails, no radios receive the packet */
     public double SUCCESS_RATIO_TX = 1.0;
@@ -128,6 +140,20 @@ public class LogisticLoss extends AbstractRadioMedium {
      */
     public final double DEFAULT_TX_POWER_DBM = 0.0;
 
+    /* Enable the time-varying component? */
+    public boolean ENABLE_TIME_VARIATION = false;
+
+    /* The current value of the time-varying */
+    private double timeVariationPlDb = 0.0;
+
+    /* Bounds for the time-varying component */
+    public double TIME_VARIATION_MIN_PL_DB = -10;
+    public double TIME_VARIATION_MAX_PL_DB = +10;
+
+    /* How often to update the time-varying path loss value (in simulation time)? */
+    private final double TIME_VARIATION_STEP_SEC = 10.0;
+
+    private long lastTimeVariationUpdatePeriod = 0;
 
     private DirectedGraphMedium dgrm; /* Used only for efficient destination lookup */
 
@@ -136,6 +162,7 @@ public class LogisticLoss extends AbstractRadioMedium {
     public LogisticLoss(Simulation simulation) {
         super(simulation);
         random = simulation.getRandomGenerator();
+        sim = simulation;
         dgrm = new DirectedGraphMedium() {
                 protected void analyzeEdges() {
                     /* Create edges according to distances.
@@ -247,7 +274,7 @@ public class LogisticLoss extends AbstractRadioMedium {
                     if (recv.isReceiving()) {
                         /*
                          * Compare new and old and decide whether to interfere.
-                         * XXX: this is a simplifiedcheck. Rather than looking at all N potential senders,
+                         * XXX: this is a simplified check. Rather than looking at all N potential senders,
                          * it looks at just this and the strongest one of the previous transmissions
                          * (since updateSignalStrengths() updates the signal strength iff the previous one is weaker)
                         */
@@ -333,11 +360,37 @@ public class LogisticLoss extends AbstractRadioMedium {
         /* Using the log-distance formula */
         double path_loss_dbm = -RX_SENSITIVITY_DBM + 10 * PATH_LOSS_EXPONENT * Math.log10(d / TRANSMITTING_RANGE);
 
+        /* Add the time-varying component if enabled */
+        if (ENABLE_TIME_VARIATION) {
+            path_loss_dbm += timeVariationPlDb;
+        }
+
         return DEFAULT_TX_POWER_DBM - path_loss_dbm + getAWGN();
+    }
+
+    private void updateTimeVariationComponent() {
+        long period = (long)(sim.getSimulationTimeMillis() / (1000.0 * TIME_VARIATION_STEP_SEC));
+
+        while(period > lastTimeVariationUpdatePeriod) {
+            /* evolve the value */
+            timeVariationPlDb += random.nextDouble() - 0.5;
+            /* bound the value */
+            if (timeVariationPlDb < TIME_VARIATION_MIN_PL_DB) {
+                timeVariationPlDb = TIME_VARIATION_MIN_PL_DB;
+            } else if (timeVariationPlDb > TIME_VARIATION_MAX_PL_DB) {
+                timeVariationPlDb = TIME_VARIATION_MAX_PL_DB;
+            }
+            /* update the time state */
+            lastTimeVariationUpdatePeriod += 1;
+        }
     }
 
     public void updateSignalStrengths() {
         /* Override: uses distance as signal strength factor */
+
+        if(ENABLE_TIME_VARIATION) {
+            updateTimeVariationComponent();
+        }
     
         /* Reset signal strengths */
         for (Radio radio : getRegisteredRadios()) {
@@ -429,6 +482,21 @@ public class LogisticLoss extends AbstractRadioMedium {
         element.setText("" + AWGN_SIGMA);
         config.add(element);
 
+        /* Time variation enabled? */
+        element = new Element("enable_time_variation");
+        element.setText("" + ENABLE_TIME_VARIATION);
+        config.add(element);
+
+        if(ENABLE_TIME_VARIATION) {
+            /* Time-variable path loss bounds */
+            element = new Element("time_variation_min_pl_db");
+            element.setText("" + TIME_VARIATION_MIN_PL_DB);
+            config.add(element);
+            element = new Element("time_variation_max_pl_db");
+            element.setText("" + TIME_VARIATION_MAX_PL_DB);
+            config.add(element);
+        }
+
         return config;
     }
 
@@ -458,6 +526,18 @@ public class LogisticLoss extends AbstractRadioMedium {
 
             if (element.getName().equals("awgn_sigma")) {
                  AWGN_SIGMA = Double.parseDouble(element.getText());
+            }
+
+            if (element.getName().equals("enable_time_variation")) {
+                 ENABLE_TIME_VARIATION = Boolean.parseBoolean(element.getText());
+            }
+
+            if (element.getName().equals("time_variation_min_pl_db")) {
+                 TIME_VARIATION_MIN_PL_DB = Double.parseDouble(element.getText());
+            }
+
+            if (element.getName().equals("time_variation_max_pl_db")) {
+                 TIME_VARIATION_MAX_PL_DB = Double.parseDouble(element.getText());
             }
         }
         return true;
