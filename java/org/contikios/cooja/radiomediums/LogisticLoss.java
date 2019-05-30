@@ -157,6 +157,7 @@ public class LogisticLoss extends AbstractRadioMedium {
     private DirectedGraphMedium dgrm; /* Used only for efficient destination lookup */
 
     private Random random = null;
+    private Random timeVariationRandom = new Random(123456);
 
     private Hashtable<Index, TimeVaryingEdge> edgesTable = new Hashtable<Index, TimeVaryingEdge>();
 
@@ -192,7 +193,7 @@ public class LogisticLoss extends AbstractRadioMedium {
                                     if (sourceID < destID) {
                                         Index key = new Index(sourceID, destID);
                                         if (!edgesTable.containsKey(key)) {
-                                            edgesTable.put(key, new TimeVaryingEdge());
+                                            edgesTable.put(key, new TimeVaryingEdge(sourceID, destID));
                                         }
                                     }
                                 }
@@ -390,6 +391,12 @@ public class LogisticLoss extends AbstractRadioMedium {
 
     private void updateTimeVariationComponent() {
         long period = (long)(sim.getSimulationTimeMillis() / (1000.0 * TIME_VARIATION_STEP_SEC));
+
+        /* XXX: Do not evolve for the first 30 min to improve routing stability */
+        period -= 30 * (60 / TIME_VARIATION_STEP_SEC);
+        if(period < 0) {
+            return;
+        }
 
         if (dgrm.needsEdgeAnalysis()) {
             dgrm.analyzeEdges();
@@ -602,14 +609,21 @@ public class LogisticLoss extends AbstractRadioMedium {
     private class TimeVaryingEdge {
         /* The current value of the time-varying */
         private double timeVariationPlDb;
+        private int source;
+        private int dest;
 
-        public TimeVaryingEdge() {
+        public TimeVaryingEdge(int source, int dest) {
             timeVariationPlDb = 0.0;
+            this.source = source;
+            this.dest = dest;
         }
 
         public void evolve() {
             /* evolve the value */
-            timeVariationPlDb += random.nextDouble() - 0.5;
+            double d = timeVariationRandom.nextDouble() - 0.5;
+            /* logger.warn(" edge " + source + "->" + dest + " q=" + timeVariationPlDb + " d=" + d); */
+
+            timeVariationPlDb += d;
             /* bound the value */
             if (timeVariationPlDb < TIME_VARIATION_MIN_PL_DB) {
                 timeVariationPlDb = TIME_VARIATION_MIN_PL_DB;
