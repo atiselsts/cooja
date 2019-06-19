@@ -134,7 +134,7 @@ public class LogisticLoss extends AbstractRadioMedium {
      * This is required to implement the Capture Effect.
      * The co-channel rejection threshold of 802.15.4 radios typically is -3 dB.
      */
-    private final double CO_CHANNEL_REJECTION = -3.0;
+    private final double CO_CHANNEL_REJECTION = Double.NEGATIVE_INFINITY; /* -3.0; */
 
     /*
      * The transmission power.
