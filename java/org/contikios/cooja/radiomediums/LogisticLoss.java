@@ -172,6 +172,8 @@ public class LogisticLoss extends AbstractRadioMedium {
                     clearEdges();
                     /* XXX: do not remove the time-varying edges to preserve their evolution */
 
+                    int numLinks = 0;
+
                     for (Radio source: LogisticLoss.this.getRegisteredRadios()) {
                         Position sourcePos = source.getPosition();
                         int sourceID = source.getMote().getID();
@@ -188,6 +190,10 @@ public class LogisticLoss extends AbstractRadioMedium {
                                         new DirectedGraphMedium.Edge(source, 
                                                 new DGRMDestinationRadio(dest)));
 
+                                if(getRxSuccessProbability(source, dest) >= 0.8) {
+                                    numLinks++;
+                                }
+
                                 if (ENABLE_TIME_VARIATION) {
                                     int destID = dest.getMote().getID();
                                     if (sourceID < destID) {
@@ -200,6 +206,7 @@ public class LogisticLoss extends AbstractRadioMedium {
                             }
                         }
                     }
+                    logger.warn("num links = " + numLinks);
                     super.analyzeEdges();
                 }
             };
