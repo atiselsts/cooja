@@ -227,8 +227,9 @@ public class RealSimFile extends VisPlugin implements ActionListener {
 			logger.info("Using mote type " + id  + ": " + mt.getIdentifier() + " / " + mt.getDescription());
 			return mt;
 		}
-		
-		Mote mote = sim.getMoteWithID(id);
+
+    int rid = sim.getRandomizedMoteId(id);
+		Mote mote = sim.getMoteWithID(rid);
 		if(mote != null) {
 			MoteType mt = mote.getType(); 
 			logger.info("Using type of existing node for node " + id  + ": " + mt.getIdentifier() + " / " + mt.getDescription());

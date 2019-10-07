@@ -46,8 +46,9 @@ public class RealSim implements Observer  {
 	}
 	
 	public boolean moteExists(int id){
-		if (sim.getMoteWithID(id) != null) return true; 
-		if (sim.getMoteWithIDUninit(id) != null) return true;
+    int rid = sim.getRandomizedMoteId(id);
+		if (sim.getMoteWithID(rid) != null) return true;
+		if (sim.getMoteWithIDUninit(rid) != null) return true;
 		return false;
 	}
 	
@@ -79,8 +80,8 @@ public class RealSim implements Observer  {
 		return true;
 	}
 	
-	public boolean rmMote(Integer id){
-		Mote rmm  = sim.getMoteWithID(id);
+	public boolean rmMote(Integer rid){
+		Mote rmm  = sim.getMoteWithID(rid);
 		DirectedGraphMedium rm = (DirectedGraphMedium) sim.getRadioMedium();
 		
 		if (rmm == null) {
@@ -90,7 +91,7 @@ public class RealSim implements Observer  {
 		for (DirectedGraphMedium.Edge e : rm.getEdges()) {
 			Radio src = e.source;
 			Radio dst = e.superDest.radio;
-			if (src.getMote().getID() == id || dst.getMote().getID() == id) {
+			if (src.getMote().getID() == rid || dst.getMote().getID() == rid) {
 				rm.removeEdge(e);
 			}
 		}
@@ -108,7 +109,7 @@ public class RealSim implements Observer  {
 			int src = e.source.getMote().getID();
 			int dst = e.superDest.radio.getMote().getID();
       int channel = e.superDest.getChannel();
-			if (src == rse.src && dst == rse.dst && channel == rse.channel) {
+			if (src == sim.getRandomizedMoteId(rse.src) && dst == sim.getRandomizedMoteId(rse.dst) && channel == rse.channel) {
 				return e;
 			}
 		}
@@ -146,15 +147,18 @@ public class RealSim implements Observer  {
 //		logger.info("Setting edge: " + idOut(rse.src) + " - " + idOut(rse.dst) + " PRR: " + rse.ratio + " RSSI: " + rse.rssi + " LQI: " + rse.lqi + " channel: " + rse.channel);
 		DirectedGraphMedium rm = (DirectedGraphMedium) sim.getRadioMedium();
 		DGRMDestinationRadio dr;
+
+    int rsrc = sim.getRandomizedMoteId(rse.src);
+    int rdst = sim.getRandomizedMoteId(rse.dst);
 		
 		//Check whether the nodes are initialized
-		if(sim.getMoteWithID(rse.src) == null || sim.getMoteWithID(rse.dst) == null){
-			if(!moteExists(rse.src)){
-				logger.error("Mote " + rse.src + " does not exist");
+		if(sim.getMoteWithID(rsrc) == null || sim.getMoteWithID(rdst) == null){
+			if(!moteExists(rsrc)){
+				logger.error("Mote " + rsrc + "/" + rse.src + " does not exist");
 				return false;
 			}
-			if(!moteExists(rse.dst)){
-				logger.error("Mote " + rse.dst + " does not exist");
+			if(!moteExists(rdst)){
+				logger.error("Mote " + rdst + "/" + rse.dst + " does not exist");
 				return false;
 			}
 			delayedEdges.add(rse);
@@ -167,7 +171,7 @@ public class RealSim implements Observer  {
 		if(edge != null){
 			dr = (DGRMDestinationRadio)edge.superDest;
 		} else {
-			dr = new DGRMDestinationRadio(sim.getMoteWithID(rse.dst).getInterfaces().getRadio());
+			dr = new DGRMDestinationRadio(sim.getMoteWithID(rdst).getInterfaces().getRadio());
       dr.channel = rse.channel;
 		}
 		
@@ -176,7 +180,7 @@ public class RealSim implements Observer  {
 		dr.lqi = rse.lqi;
 		
 		if(edge == null){
-			edge = new Edge(sim.getMoteWithID(rse.src).getInterfaces().getRadio(), dr);
+			edge = new Edge(sim.getMoteWithID(rsrc).getInterfaces().getRadio(), dr);
 			rm.addEdge(edge);
 		}
 		
@@ -189,7 +193,8 @@ public class RealSim implements Observer  {
 
 	public boolean setBaseRssi(int moteid, double baserssi){
 		AbstractRadioMedium dgm = (AbstractRadioMedium) sim.getRadioMedium();
-		Mote mote = sim.getMoteWithID(moteid);
+    int rmoteid = sim.getRandomizedMoteId(moteid);
+		Mote mote = sim.getMoteWithID(rmoteid);
 		
 		if (mote == null) return false;
 

@@ -90,7 +90,9 @@ public class ContikiMoteID extends MoteID implements ContikiMoteInterface {
   }
 
   public void setMoteID(int newID) {
-    moteID = newID;
+    moteID = mote.getSimulation().getRandomizedMoteId(newID);
+    logger.warn("Setting ID " + moteID + " for mote " + newID);
+
     moteMem.setIntValueOf("simMoteID", moteID);
     moteMem.setByteValueOf("simMoteIDChanged", (byte) 1);
     moteMem.setIntValueOf("simRandomSeed", (int) (mote.getSimulation().getRandomSeed() + newID));

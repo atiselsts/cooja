@@ -96,6 +96,9 @@ public class Simulation extends Observable implements Runnable {
 
   private SafeRandom randomGenerator;
 
+  private int moteIdArray[];
+  private final int MAX_NUM_MOTE_IDS = 30;
+
   private boolean hasMillisecondObservers = false;
   private MillisecondObservable millisecondObservable = new MillisecondObservable();
   private class MillisecondObservable extends Observable {
@@ -324,6 +327,32 @@ public class Simulation extends Observable implements Runnable {
   public Simulation(Cooja cooja) {
     this.cooja = cooja;
     randomGenerator = new SafeRandom(this);
+
+    moteIdArray = new int[MAX_NUM_MOTE_IDS];
+    for (int i = 0; i < MAX_NUM_MOTE_IDS; ++i) {
+      moteIdArray[i] = i;
+    }
+  }
+
+  private void shuffleArray(int[] ar) {
+    logger.warn("Initializing mote ID randomization");
+    for (int i = ar.length - 1; i > 0; i--) {
+      int index = randomGenerator.nextInt(i + 1);
+      /* Simple swap */
+      int a = ar[index];
+      ar[index] = ar[i];
+      ar[i] = a;
+    }
+  }
+
+  public int getRandomizedMoteId(int id) {
+    if(id <= 1) {
+      return id;
+    }
+    if(id - 2 >= moteIdArray.length) {
+      return id;
+    }
+    return moteIdArray[id - 2] + 2; /* starting from 2, since 1 is the root */
   }
 
   /**
@@ -420,6 +449,9 @@ public class Simulation extends Observable implements Runnable {
     this.randomSeed = randomSeed;
     randomGenerator.setSeed(randomSeed);
     logger.info("Simulation random seed: " + randomSeed);
+
+    /* reinitialize the mote IDs */
+    shuffleArray(moteIdArray);
   }
 
   /**
